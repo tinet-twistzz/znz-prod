@@ -1,0 +1,70 @@
+# 飞书预警机器人字段映射与卡片交互配置文件
+# 修改本文件即可调整飞书推送字段、卡片排版、回传字段名与按钮选项，无需修改主系统 (agent/) 或 Python 代码。
+
+card_header:
+  title: "群服务预警"
+  pending_color: "red"
+
+# 1. 推送与展示字段映射（按列表顺序在飞书卡片中逐行渲染）
+# source_key: 对应主系统标准字段名（留空表示使用 default_value 置空或固定值）
+# external_key: 对外推送/序列化时的字段名（可随时按接收方要求改名，与主系统解耦）
+# label: 飞书卡片上显示的中文标题
+push_fields:
+  - label: "客户名称"
+    source_key: "customer_name"
+    external_key: "customer_name"
+  - label: "客户id"
+    source_key: "customer_id"
+    external_key: "customer_id"
+  - label: "群id"
+    source_key: "group_id"
+    external_key: "group_id"
+  - label: "责任人"
+    source_key: "owner"
+    external_key: "owner"
+    format: "role_cn"
+  - label: "主管"
+    source_key: "supervisor"
+    external_key: "supervisor"
+    format: "feishu_at"
+    default_value: ""
+  - label: "预警细节"
+    source_key: "details"
+    external_key: "details"
+
+# 飞书预警群 (chat_id) 与对应负责主管邮箱映射（推送至对应群时自动填充 supervisor 并在卡片中 @ 该主管）
+chat_supervisors:
+  oc_4277cec247c084750fe4b86209fa1d6d: "qianqian.zhao@compassedu.hk"
+  oc_202fda32a06160c65ed05625b274f5e1: "xiaonan.liu@compassedu.hk"
+  oc_6b19b271c0f571d873f0482b41af5fed: "13966280750@163.com"
+
+# 3. 飞书多维表格看板自动同步配置（OpenAPI 直连，按 alert_id 幂等新增/原位更新/清除）
+bitable:
+  enabled: true
+  app_token: "QR7tbtkxkaS8XtsNjI9c3tl6nVf"
+  table_id: "tbl6D1oLTw1pcFct"
+  pending_verdict: "待审批"
+
+# 2. 回送（回调）字段与评估按钮配置
+callback:
+  # 主管评估结果的回送字段名（可随时改为任意字段名，如 opinion / audit_result 等）
+  verdict_field_name: "supervisor_verdict"
+  label: "意见"
+  time_label: "评估时间"
+  show_rule_ids_after_eval: true
+
+  # 卡片按钮列表及对 YAML 规则标签 (playbook_rules_ledger.count) 的计分影响
+  # delta: 1 (发起预警 count+1) | 0 (暂不发起 count不变) | -1 (误报 count-1)
+  options:
+    - text: "发起预警"
+      value: "发起预警"
+      style: "primary"
+      delta: 1
+    - text: "暂不发起"
+      value: "暂不发起"
+      style: "default"
+      delta: 0
+    - text: "误报"
+      value: "误报"
+      style: "danger"
+      delta: -1

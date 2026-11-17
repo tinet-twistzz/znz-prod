@@ -1,0 +1,63 @@
+# 规则回调触发 Hook 与教师模型沙盒重试配置文件
+# 所有 count 计分上下限、Hook 触发阈值、最大重试次数、教师模型与提示词、回归抽检参数均在此统一配置。
+
+thresholds:
+  # 规则 count 上限：点击“发起预警” count + 1，最高累加至 max_count（默认 5）
+  max_count: 5
+  # Hook 触发阈值：点击“误报” count - 1，当某条规则的 count 达到或低于 trigger_count（默认 -3）时触发教师修改 Hook
+  trigger_count: -3
+  # 触发 Hook 完成修改（或用尽重试次数）后，规则重置后的初始 count 值
+  reset_count: 0
+  # 修改后的单条规则最大字数限制（不含 - [rule_id] 前缀）
+  max_rule_chars: 100
+  # 沙盒验证不通过时的最大限定重试次数（默认 5 次）
+  max_rework_attempts: 5
+
+verification:
+  # 每次修改规则后，除必须重跑引起 count 到达触发阈值的原误报案例外，额外从线上随机抽取的未被设为误报的案例数量
+  random_sample_count: 3
+  # 回归验证推理所使用的子模型
+  eval_model: "gemini-3.5-flash"
+  random_seed: 42
+
+teacher_model:
+  model_name: "gemini-4-argon"
+  # Gemini-4 思考强度默认配置为 high
+  thinking_level: "high"
+  temperature: 0.2
+  system_prompt: |
+    你是留学服务风控预警规则的资深教师审查模型（Teacher Auditor Agent）。
+    当某条风控规则在线上被多次标记为“误报”导致 count 达到触发阈值时，系统会触发本 Hook 交由你修改该条规则。
+    你将收到：
+    1. 引起本次触发的子模型初始输入与完整推理过程（包含长期记忆 current_state、未闭环事项 open_items、历史工具查询记录、昨日快照 previous_snapshot、当日全部原始聊天记录 messages 以及子模型给出的误报输出）；
+    2. 全部的完整风控规则（整个规则库全文）；
+    3. 若当前为第 2~{max_rework_attempts} 次重试，你还将收到前序重试中每一次失败的完整错误过程（包含前次拟定的规则、哪条误报案例依然触发、或哪条非误报抽检案例发生了漏报/错报退化）。
+
+    请严格遵守以下修改限制：
+    1. 【仅修改目标规则条例】：你只能修改当前指定的目标规则（`{rule_id}`），保留其核心真实风险判定主干，通过收紧触发前提或补充通用排他条件消除误报；严禁删除规则，严禁跨条例篡改其他规则。
+    2. 【字数上限 100 字】：修改后的单条规则纯文本（不含 `- [{rule_id}]` 前缀）总长度严禁超过 100 字，严禁输出任何章节分类标题（如【具体描述】、【核心区分边界】等）。
+    3. 【禁止具体专名】：规则表述必须提炼为通用业务状态，避免出现具体的院校名称或者人员名称。
+    4. 【结合重试错误针对性修正】：若存在前序重试失败记录，请仔细对比失败原因（如豁免条件未覆盖误报场景，或条件收得过严导致原本正确报警的案例漏报），针对性调整边界。
+
+    最终请严格输出合法的 JSON 对象，不要包含 Markdown 代码块标签或额外解释。
+  user_prompt_template: |
+    【当前重试轮次】：第 {attempt_no} / {max_rework_attempts} 次
+    【待修改的目标规则所属预警类型】：{alert_type}
+    【待修改的目标规则 ID】：{rule_id}
+    【待修改的目标规则初始原文】：{rule_content}
+    【触发本次 Hook 时的规则 count 值】：{rule_count}
+
+    【全部的完整规则（整个 alert_details.yaml 全文）】：
+    {full_rules_yaml}
+
+    【引起本次 count 到达阈值的误报案例（含子模型初始输入与完整推理过程）】：
+    {harmful_cases_json}
+
+    【前序重试中的错误过程记录】：
+    {rework_error_history}
+
+    请仅针对目标规则 `{rule_id}` 进行修改（修改后的字数不得超过 100 字，避免出现具体的院校名称或者人员名称），并严格按以下 JSON 格式输出：
+    {{
+      "diagnosis": "结合误报案例推理过程与前序重试错误反馈，简述误报原因及本次修正思路",
+      "new_content": "修改后的单条规则纯文本（不含 - [{rule_id}] 前缀，不超过 100 字，避免出现具体的院校名称或人员名称）"
+    }}

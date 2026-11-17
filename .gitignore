@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.env.local
+.hermes/
+.venv/
+.worktrees/
+__pycache__/
+*.py[cod]
+data/
+pgdata/

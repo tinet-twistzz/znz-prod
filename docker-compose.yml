@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-znz}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-znz}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  znz-service:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BIND_PORT:-5001}:5001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./feishu_card_config.yaml:/app/feishu_card_config.yaml
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5001
+      ANALYZE_MAX_WORKERS: ${ANALYZE_MAX_WORKERS:-20}
+      MULTI_LABEL: ${MULTI_LABEL:-false}
+      DB_URL: ${DB_URL:-postgresql://postgres:postgres@postgres:5432/znz}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      TEACHER_MODEL: ${TEACHER_MODEL:-gemini-4-argon}
+      FEISHU_APP_ID: ${FEISHU_APP_ID:-}
+      FEISHU_APP_SECRET: ${FEISHU_APP_SECRET:-}
+      FEISHU_DEFAULT_RECEIVE_ID: ${FEISHU_DEFAULT_RECEIVE_ID:-}
+      ENABLE_FEISHU_WS: ${ENABLE_FEISHU_WS:-1}
+      FEISHU_BITABLE_APP_TOKEN: ${FEISHU_BITABLE_APP_TOKEN:-}
+      FEISHU_BITABLE_TABLE_ID: ${FEISHU_BITABLE_TABLE_ID:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,.feishu.cn,.larksuite.com}
+      http_proxy: ${HTTP_PROXY:-}
+      https_proxy: ${HTTPS_PROXY:-}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,.feishu.cn,.larksuite.com}
+    restart: unless-stopped
